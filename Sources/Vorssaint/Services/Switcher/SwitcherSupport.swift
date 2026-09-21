@@ -1364,13 +1364,19 @@ enum SwitcherSupport {
         let initialFrontmostPID = frontmostPID()
         // A hop travels across desktops, and the system fronts whatever sits
         // on top of each one it passes. Which app is in front while that runs
-        // says nothing about where the user wants to be, and reading it as
-        // "they moved on" leaves the window they picked behind that app. Such
-        // a pass gives up for the one signal that does carry intent: the app
-        // moved to a window it opened after the switch.
+        // says nothing about where the user wants to be, so hop passes opt out
+        // of this check and use the app's own focus below. Ordinary retries,
+        // however, must never reclaim a window after another app is frontmost:
+        // the source app can still be reported here while the handoff is
+        // settling, and raising the target again can change its frame.
+        let waitingForInitialMinimizedRestore = targetStartedMinimized
+            && targetIsMinimized
+            && initialFrontmostPID == sourcePID
         if !ignoresForeground,
-           let sourcePID, let initialFrontmostPID,
-           initialFrontmostPID != targetPID && initialFrontmostPID != sourcePID && initialFrontmostPID != ownPID {
+           let initialFrontmostPID,
+           initialFrontmostPID != targetPID,
+           initialFrontmostPID != ownPID,
+           !waitingForInitialMinimizedRestore {
             return false
         }
         // Z-order cannot identify keyboard focus: a new transparent helper

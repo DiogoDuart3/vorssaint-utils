@@ -4578,13 +4578,13 @@ enum SwitcherModelFeatureTests {
                                                         targetStartedMinimized: false,
                                                         ownPID: 99),
                "App Switcher focus retries can continue while the selected target app is still active")
-        suite.expect(SwitcherSupport.shouldContinueFocusRetry(targetPID: 10,
-                                                        sourcePID: 20,
-                                                        frontmostPID: 20,
-                                                        targetIsMinimized: false,
-                                                        targetStartedMinimized: false,
-                                                        ownPID: 99),
-               "App Switcher focus retries can continue during the source-target handoff")
+        suite.expect(!SwitcherSupport.shouldContinueFocusRetry(targetPID: 10,
+                                                         sourcePID: 20,
+                                                         frontmostPID: 20,
+                                                         targetIsMinimized: false,
+                                                         targetStartedMinimized: false,
+                                                         ownPID: 99),
+               "App Switcher focus retries stop while the source app remains frontmost")
         suite.expect(!SwitcherSupport.shouldContinueFocusRetry(targetPID: 10,
                                                          sourcePID: 20,
                                                          frontmostPID: 20,
@@ -5332,7 +5332,7 @@ enum SwitcherModelFeatureTests {
             ("unavailable focus does not treat an auxiliary surface as user intent", 10, [500], nil, snapshot, true, 1, 1),
             ("unavailable window list preserves existing behavior", 10, [], 500, snapshot, true, 1, 0),
             ("unavailable initial snapshot makes no later queries", 10, [500], 500, [], true, 0, 0),
-            ("source handoff ignores windows created in the background", 20, [500], 500, snapshot, true, 0, 0),
+            ("source handoff stops before reading background windows", 20, [500], 500, snapshot, false, 0, 0),
             ("own app handoff makes no window queries", 99, [500], 500, snapshot, true, 0, 0),
             ("unrelated app cancels before window queries", 30, [500], 500, snapshot, false, 0, 0),
             ("unknown foreground does not infer a new user action", nil, [500], 500, snapshot, true, 0, 0)
