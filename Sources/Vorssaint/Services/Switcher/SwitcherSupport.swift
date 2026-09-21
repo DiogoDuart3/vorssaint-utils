@@ -55,11 +55,13 @@ final class SwitcherWindowFocusRetryState {
                         targetAppWindowIDs: @autoclosure () -> Set<CGWindowID>,
                         targetAppFocusedWindowID: @autoclosure () -> CGWindowID?,
                         targetWindowIsFocused: @autoclosure () -> Bool = false,
+                        stopsWhenTargetFocused: Bool = false,
                         ignoresForeground: Bool = false,
                         ownPID: pid_t = ProcessInfo.processInfo.processIdentifier) -> Bool {
         guard isActive else { return false }
         let observedFrontmostPID = frontmostPID()
-        if !ignoresForeground,
+        if stopsWhenTargetFocused,
+           !ignoresForeground,
            !targetStartedMinimized,
            observedFrontmostPID == targetPID,
            targetWindowIsFocused() {
@@ -1374,17 +1376,18 @@ enum SwitcherSupport {
         // A hop travels across desktops, and the system fronts whatever sits
         // on top of each one it passes. Which app is in front while that runs
         // says nothing about where the user wants to be, so hop passes opt out
-        // of this check and use the app's own focus below. Ordinary retries,
-        // however, must never reclaim a window after another app is frontmost:
-        // the source app can still be reported here while the handoff is
-        // settling, and raising the target again can change its frame.
+        // of this check and use the app's own focus below. Ordinary retries
+        // must never reclaim a window after an unrelated app is frontmost.
+        // The source app is allowed while the handoff is settling, because
+        // the target may still need its delayed pass.
         let waitingForInitialMinimizedRestore = targetStartedMinimized
             && targetIsMinimized
-            && initialFrontmostPID == sourcePID
+            && (sourcePID == nil || initialFrontmostPID == sourcePID)
         if !ignoresForeground,
            let initialFrontmostPID,
            initialFrontmostPID != targetPID,
            initialFrontmostPID != ownPID,
+           initialFrontmostPID != sourcePID,
            !waitingForInitialMinimizedRestore {
             return false
         }
