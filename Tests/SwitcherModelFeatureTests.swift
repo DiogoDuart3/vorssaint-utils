@@ -5357,10 +5357,11 @@ enum SwitcherModelFeatureTests {
         let state = SwitcherWindowFocusRetryState(targetWindowID: 101,
                                                   targetStartedMinimized: false,
                                                   knownWindowIDs: snapshot)
-        suite.expect(state.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
+        suite.expect(!state.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
                                     targetMinimizedState: false, targetAppWindowIDs: withHelper,
-                                    targetAppFocusedWindowID: 101, ownPID: 99),
-               "a transparent helper does not cancel the fullscreen focus chain")
+                                    targetAppFocusedWindowID: 101,
+                                    targetWindowIsFocused: true, ownPID: 99),
+               "a transparent helper does not justify re-raising an already focused target")
         suite.expect(!state.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
                                      targetMinimizedState: false, targetAppWindowIDs: [500],
                                      targetAppFocusedWindowID: 500, ownPID: 99),
@@ -5387,17 +5388,25 @@ enum SwitcherModelFeatureTests {
                 suite.expect(!pending.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: foreground,
                                                 targetMinimizedState: false, targetAppWindowIDs: [500],
                                                 targetAppFocusedWindowID: focusAfterSwitchingAway(), ownPID: 99),
-                       "a slow focus query cannot reclaim the app after the user leaves it")
+                       "a slow focus query cannot reclaim the app after the user leaves it (destination \(String(describing: destination)), focus \(String(describing: focusResult)))")
             }
         }
 
         let partial = SwitcherWindowFocusRetryState(targetWindowID: 101,
                                                     targetStartedMinimized: false,
                                                     knownWindowIDs: [102])
-        suite.expect(partial.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
-                                      targetMinimizedState: false, targetAppWindowIDs: [101],
-                                      targetAppFocusedWindowID: 101, ownPID: 99),
-               "the selected target is not new when a partial snapshot missed it")
+        suite.expect(!partial.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
+                                       targetMinimizedState: false, targetAppWindowIDs: [101],
+                                       targetAppFocusedWindowID: 101,
+                                       targetWindowIsFocused: true, ownPID: 99),
+               "a focused selected target does not receive a redundant retry")
+        let unfocused = SwitcherWindowFocusRetryState(targetWindowID: 101,
+                                                       targetStartedMinimized: false,
+                                                       knownWindowIDs: [101, 102])
+        suite.expect(unfocused.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
+                                        targetMinimizedState: false, targetAppWindowIDs: [102],
+                                        targetAppFocusedWindowID: 102, ownPID: 99),
+               "an unfocused selected target still gets its settling retry")
         let minimized = SwitcherWindowFocusRetryState(targetWindowID: 101,
                                                       targetStartedMinimized: true,
                                                       knownWindowIDs: snapshot)

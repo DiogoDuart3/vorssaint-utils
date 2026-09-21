@@ -545,6 +545,14 @@ enum WindowActivator {
         }
         let minimizedState = windowMinimizedState(windowID: windowID,
                                                   pid: targetWindowOwnerPID)
+        var resolvedFocusedWindowID: CGWindowID?
+        var didResolveFocusedWindowID = false
+        func currentFocusedWindowID() -> CGWindowID? {
+            guard !didResolveFocusedWindowID else { return resolvedFocusedWindowID }
+            didResolveFocusedWindowID = true
+            resolvedFocusedWindowID = focusedWindowID(for: targetWindowOwnerPID)
+            return resolvedFocusedWindowID
+        }
         return state.shouldContinue(
             targetPID: targetPID,
             sourcePID: sourcePID,
@@ -557,7 +565,8 @@ enum WindowActivator {
             // snapshot reported nothing new in exactly the race this guard
             // exists for, and the focus reading below was never taken.
             targetAppWindowIDs: windowIDs(ownerPID: targetWindowOwnerPID, options: .optionAll),
-            targetAppFocusedWindowID: focusedWindowID(for: targetWindowOwnerPID),
+            targetAppFocusedWindowID: currentFocusedWindowID(),
+            targetWindowIsFocused: currentFocusedWindowID() == windowID,
             ignoresForeground: ignoresForeground
         )
     }

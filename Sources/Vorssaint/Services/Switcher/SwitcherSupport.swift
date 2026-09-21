@@ -54,9 +54,18 @@ final class SwitcherWindowFocusRetryState {
                         targetMinimizedState: Bool?,
                         targetAppWindowIDs: @autoclosure () -> Set<CGWindowID>,
                         targetAppFocusedWindowID: @autoclosure () -> CGWindowID?,
+                        targetWindowIsFocused: @autoclosure () -> Bool = false,
                         ignoresForeground: Bool = false,
                         ownPID: pid_t = ProcessInfo.processInfo.processIdentifier) -> Bool {
         guard isActive else { return false }
+        let observedFrontmostPID = frontmostPID()
+        if !ignoresForeground,
+           !targetStartedMinimized,
+           observedFrontmostPID == targetPID,
+           targetWindowIsFocused() {
+            isActive = false
+            return false
+        }
         isActive = SwitcherSupport.shouldContinueFocusRetry(
             targetPID: targetPID,
             sourcePID: sourcePID,
