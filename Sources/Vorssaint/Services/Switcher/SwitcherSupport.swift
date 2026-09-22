@@ -1358,6 +1358,21 @@ enum SwitcherSupport {
         })
     }
 
+    /// Source app for a delayed focus retry. Prefer an explicit session source;
+    /// otherwise keep whatever was frontmost when activation began. The target
+    /// and this process are excluded so a settling handoff still gets its pass
+    /// without treating an unrelated later activation as that source.
+    static func retainedActivationSourcePID(explicit: pid_t?,
+                                            targetPID: pid_t,
+                                            frontmostPID: pid_t?,
+                                            ownPID: pid_t = ProcessInfo.processInfo.processIdentifier) -> pid_t? {
+        let candidate = explicit ?? frontmostPID
+        guard let candidate,
+              candidate != targetPID,
+              candidate != ownPID else { return nil }
+        return candidate
+    }
+
     static func shouldContinueFocusRetry(targetPID: pid_t,
                                          sourcePID: pid_t?,
                                          frontmostPID: @autoclosure () -> pid_t?,

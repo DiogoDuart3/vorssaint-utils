@@ -22,7 +22,7 @@ enum WindowActivator {
     static func activate(_ item: SwitcherItem,
                          retry: Bool = true,
                          sourceWasFullscreen: Bool = false,
-                         sourcePID: pid_t? = nil,
+                         sourcePID explicitSourcePID: pid_t? = nil,
                          sourceWindowID: CGWindowID? = nil,
                          sourceWindowOwnerPID: pid_t? = nil) {
         let generation = beginActivation(for: item.pid)
@@ -35,6 +35,15 @@ enum WindowActivator {
         }
 
         guard let app = NSRunningApplication(processIdentifier: item.pid) else { return }
+        // Dock Preview and the Command Bar often omit a session source. Keep
+        // the frontmost app from activation start so the ordinary handoff
+        // retry still settles, without reclaiming focus after a later
+        // unrelated activation.
+        let sourcePID = SwitcherSupport.retainedActivationSourcePID(
+            explicit: explicitSourcePID,
+            targetPID: item.pid,
+            frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+        )
         let windowOwnerPID = item.windowOwnerPID
 
         app.unhide()
@@ -169,7 +178,11 @@ enum WindowActivator {
                               stopsWhenTargetFocused: true)
     }
 
-    static func activate(pid: pid_t, windowID: CGWindowID?, appName: String, retry: Bool = true) {
+    static func activate(pid: pid_t,
+                         windowID: CGWindowID?,
+                         appName: String,
+                         retry: Bool = true,
+                         sourcePID: pid_t? = nil) {
         let item: SwitcherItem
         if let windowID {
             item = .window(id: windowID, title: appName, appName: appName,
@@ -177,7 +190,7 @@ enum WindowActivator {
         } else {
             item = .appOnly(appName: appName, pid: pid)
         }
-        activate(item, retry: retry)
+        activate(item, retry: retry, sourcePID: sourcePID)
     }
 
     static func focusedWindowID(for pid: pid_t) -> CGWindowID? {
