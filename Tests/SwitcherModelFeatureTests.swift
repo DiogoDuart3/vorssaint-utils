@@ -4752,6 +4752,27 @@ enum SwitcherModelFeatureTests {
         }()
         suite.expect(!commandBarWindowActivate.isEmpty,
                "Command Bar captures its handoff source before the activation beat")
+        let commitSessionCode: String = {
+            let source = ((try? String(
+                contentsOfFile: "Sources/Vorssaint/Services/Switcher/AppSwitcher.swift",
+                encoding: .utf8)) ?? "")
+                .components(separatedBy: "\n")
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+                .joined(separator: "\n")
+            guard let start = source.range(of: "func commitSession()"),
+                  let end = source.range(of: "private func resumePendingCommitAfterClose()",
+                                         range: start.upperBound..<source.endIndex)
+            else { return "" }
+            return String(source[start.lowerBound..<end.lowerBound])
+        }()
+        let handoffCapture = commitSessionCode.range(
+            of: "let handoffSourcePID = NSWorkspace.shared.frontmostApplication")
+        let sessionEnd = commitSessionCode.range(of: "endSession()")
+        suite.expect(handoffCapture != nil && sessionEnd != nil
+               && handoffCapture!.lowerBound < sessionEnd!.lowerBound
+               && commitSessionCode.contains("sourcePID: source?.pid,")
+               && commitSessionCode.contains("handoffSourcePID: handoffSourcePID,"),
+               "App Switcher sessions without a source item keep the app in front as the handoff source")
         let windowScopes = activatorCode
             .components(separatedBy: "windowIDs(ownerPID:")
             .dropFirst()
