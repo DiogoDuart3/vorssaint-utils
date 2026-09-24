@@ -5503,16 +5503,16 @@ enum SwitcherModelFeatureTests {
                                              targetAppFocusedWindowID: 101,
                                              targetWindowIsFocused: true, ownPID: 99),
                "fullscreen retries keep later passes available for an already focused target")
-        suite.expect(!state.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
-                                     targetMinimizedState: false, targetAppWindowIDs: [500],
-                                     targetAppFocusedWindowID: 500, ownPID: 99),
+        suite.expect(!fullscreenState.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
+                                               targetMinimizedState: false, targetAppWindowIDs: [500],
+                                               targetAppFocusedWindowID: 500, ownPID: 99),
                "a new focused window cancels the remaining fullscreen passes")
         var lateReads = 0
         func lateWindows() -> Set<CGWindowID> { lateReads += 1; return [102] }
         func lateFocus() -> CGWindowID? { lateReads += 1; return 102 }
-        suite.expect(!state.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
-                                     targetMinimizedState: false, targetAppWindowIDs: lateWindows(),
-                                     targetAppFocusedWindowID: lateFocus(), ownPID: 99),
+        suite.expect(!fullscreenState.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
+                                               targetMinimizedState: false, targetAppWindowIDs: lateWindows(),
+                                               targetAppFocusedWindowID: lateFocus(), ownPID: 99),
                "a later pass cannot reclaim focus after the new window closes")
         suite.expect(lateReads == 0, "a cancelled focus chain performs no later window queries")
 
@@ -5536,7 +5536,14 @@ enum SwitcherModelFeatureTests {
         let partial = SwitcherWindowFocusRetryState(targetWindowID: 101,
                                                     targetStartedMinimized: false,
                                                     knownWindowIDs: [102])
-        suite.expect(!partial.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
+        suite.expect(partial.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
+                                      targetMinimizedState: false, targetAppWindowIDs: [101],
+                                      targetAppFocusedWindowID: 101, ownPID: 99),
+               "the selected target is not new when a partial snapshot missed it")
+        let focused = SwitcherWindowFocusRetryState(targetWindowID: 101,
+                                                    targetStartedMinimized: false,
+                                                    knownWindowIDs: [102])
+        suite.expect(!focused.shouldContinue(targetPID: 10, sourcePID: 20, frontmostPID: 10,
                                        targetMinimizedState: false, targetAppWindowIDs: [101],
                                        targetAppFocusedWindowID: 101,
                                        targetWindowIsFocused: true,
