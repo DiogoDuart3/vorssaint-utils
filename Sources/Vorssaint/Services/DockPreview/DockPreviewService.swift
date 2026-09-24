@@ -213,11 +213,11 @@ final class DockPreviewService: ObservableObject {
         }
         endSession()
         guard WindowEnumerator.dockPreviewMayActivate(item) else { return }
-        // Retain the frontmost app before activation so the delayed focus
-        // handoff still settles when that app remains in front.
+        // The app in front keeps the delayed focus handoff settling; it is
+        // not a session source, so minimizing the window later leaves it be.
         WindowActivator.activate(
             item,
-            sourcePID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+            handoffSourcePID: NSWorkspace.shared.frontmostApplication?.processIdentifier
         )
         restoreFrame?()
     }
@@ -334,7 +334,7 @@ final class DockPreviewService: ObservableObject {
         if moved {
             WindowActivator.activate(
                 item,
-                sourcePID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+                handoffSourcePID: NSWorkspace.shared.frontmostApplication?.processIdentifier
             )
             WindowActivator.focusPlacedWindow(item)
         }
@@ -1626,7 +1626,7 @@ final class DockPreviewPinnedPanel: ObservableObject, Identifiable {
         selectedWindowID = item.windowID
         WindowActivator.activate(
             item,
-            sourcePID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+            handoffSourcePID: NSWorkspace.shared.frontmostApplication?.processIdentifier
         )
     }
 

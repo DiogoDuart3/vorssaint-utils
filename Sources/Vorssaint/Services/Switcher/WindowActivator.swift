@@ -22,7 +22,8 @@ enum WindowActivator {
     static func activate(_ item: SwitcherItem,
                          retry: Bool = true,
                          sourceWasFullscreen: Bool = false,
-                         sourcePID explicitSourcePID: pid_t? = nil,
+                         sourcePID: pid_t? = nil,
+                         handoffSourcePID: pid_t? = nil,
                          sourceWindowID: CGWindowID? = nil,
                          sourceWindowOwnerPID: pid_t? = nil) {
         let generation = beginActivation(for: item.pid)
@@ -35,14 +36,13 @@ enum WindowActivator {
         }
 
         guard let app = NSRunningApplication(processIdentifier: item.pid) else { return }
-        // Dock Preview and the Command Bar often omit a session source. Keep
-        // the frontmost app from activation start so the ordinary handoff
-        // retry still settles, without reclaiming focus after a later
-        // unrelated activation.
-        let sourcePID = SwitcherSupport.retainedActivationSourcePID(
-            explicit: explicitSourcePID,
-            targetPID: item.pid,
-            frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+        // Only the delayed focus guards may treat a caller's handoff app as
+        // the source. The minimize restore, source staging and Space hops stay
+        // limited to the App Switcher session source.
+        let retrySourcePID = SwitcherSupport.focusRetrySourcePID(
+            sessionSourcePID: sourcePID,
+            handoffSourcePID: handoffSourcePID,
+            targetPID: item.pid
         )
         let windowOwnerPID = item.windowOwnerPID
 
@@ -64,7 +64,7 @@ enum WindowActivator {
             }
             if let retryState {
                 scheduleAppActivationRetries(targetPID: item.pid,
-                                             sourcePID: sourcePID,
+                                             sourcePID: retrySourcePID,
                                              plan: activationPlan,
                                              state: retryState,
                                              generation: generation,
@@ -116,7 +116,7 @@ enum WindowActivator {
                           shouldContinueFocusRetry(windowID: windowID,
                                                    targetPID: item.pid,
                                                    targetWindowOwnerPID: windowOwnerPID,
-                                                   sourcePID: sourcePID,
+                                                   sourcePID: retrySourcePID,
                                                    state: retryState,
                                                    stopsWhenTargetFocused: false),
                           let app = NSRunningApplication(processIdentifier: item.pid),
@@ -137,6 +137,7 @@ enum WindowActivator {
                                   targetPID: item.pid,
                                   targetWindowOwnerPID: windowOwnerPID,
                                   sourcePID: sourcePID,
+                                  retrySourcePID: retrySourcePID,
                                   sourceWindowID: sourceWindowID,
                                   sourceWindowOwnerPID: sourceWindowOwnerPID,
                                   state: retryState,
@@ -169,6 +170,7 @@ enum WindowActivator {
                               targetPID: item.pid,
                               targetWindowOwnerPID: windowOwnerPID,
                               sourcePID: sourcePID,
+                              retrySourcePID: retrySourcePID,
                               sourceWindowID: sourceWindowID,
                               sourceWindowOwnerPID: sourceWindowOwnerPID,
                               state: retryState,
@@ -182,7 +184,7 @@ enum WindowActivator {
                          windowID: CGWindowID?,
                          appName: String,
                          retry: Bool = true,
-                         sourcePID: pid_t? = nil) {
+                         handoffSourcePID: pid_t? = nil) {
         let item: SwitcherItem
         if let windowID {
             item = .window(id: windowID, title: appName, appName: appName,
@@ -190,7 +192,7 @@ enum WindowActivator {
         } else {
             item = .appOnly(appName: appName, pid: pid)
         }
-        activate(item, retry: retry, sourcePID: sourcePID)
+        activate(item, retry: retry, handoffSourcePID: handoffSourcePID)
     }
 
     static func focusedWindowID(for pid: pid_t) -> CGWindowID? {
@@ -474,6 +476,7 @@ enum WindowActivator {
                                              targetPID: pid_t,
                                              targetWindowOwnerPID: pid_t,
                                              sourcePID: pid_t?,
+                                             retrySourcePID: pid_t?,
                                              sourceWindowID: CGWindowID?,
                                              sourceWindowOwnerPID: pid_t?,
                                              state: SwitcherWindowFocusRetryState,
@@ -487,7 +490,7 @@ enum WindowActivator {
                       shouldContinueFocusRetry(windowID: windowID,
                                                targetPID: targetPID,
                                                targetWindowOwnerPID: targetWindowOwnerPID,
-                                               sourcePID: sourcePID,
+                                               sourcePID: retrySourcePID,
                                                state: state,
                                                stopsWhenTargetFocused: stopsWhenTargetFocused),
                       let app = NSRunningApplication(processIdentifier: targetPID),

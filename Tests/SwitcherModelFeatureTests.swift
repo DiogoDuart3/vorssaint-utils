@@ -4585,31 +4585,36 @@ enum SwitcherModelFeatureTests {
                                                         targetStartedMinimized: false,
                                                         ownPID: 99),
                "App Switcher focus retries preserve the source handoff while it settles")
-        suite.expect(SwitcherSupport.retainedActivationSourcePID(explicit: nil,
-                                                           targetPID: 10,
-                                                           frontmostPID: 20,
-                                                           ownPID: 99) == 20,
-               "activation without a session source keeps the frontmost app as the handoff source")
-        suite.expect(SwitcherSupport.retainedActivationSourcePID(explicit: 20,
-                                                           targetPID: 10,
-                                                           frontmostPID: 30,
-                                                           ownPID: 99) == 20,
-               "an explicit session source outranks the app that happens to be frontmost")
-        suite.expect(SwitcherSupport.retainedActivationSourcePID(explicit: nil,
-                                                           targetPID: 10,
-                                                           frontmostPID: 10,
-                                                           ownPID: 99) == nil
-               && SwitcherSupport.retainedActivationSourcePID(explicit: nil,
-                                                        targetPID: 10,
-                                                        frontmostPID: 99,
-                                                        ownPID: 99) == nil,
-               "the target and this process are never kept as an activation source")
+        suite.expect(SwitcherSupport.focusRetrySourcePID(sessionSourcePID: nil,
+                                                   handoffSourcePID: 20,
+                                                   targetPID: 10,
+                                                   ownPID: 99) == 20,
+               "a caller's handoff app becomes the focus retry source without a session source")
+        suite.expect(SwitcherSupport.focusRetrySourcePID(sessionSourcePID: 20,
+                                                   handoffSourcePID: 30,
+                                                   targetPID: 10,
+                                                   ownPID: 99) == 20,
+               "a session source outranks a caller's handoff app")
+        suite.expect(SwitcherSupport.focusRetrySourcePID(sessionSourcePID: nil,
+                                                   handoffSourcePID: nil,
+                                                   targetPID: 10,
+                                                   ownPID: 99) == nil,
+               "activation without any source never adopts the frontmost app on its own")
+        suite.expect(SwitcherSupport.focusRetrySourcePID(sessionSourcePID: nil,
+                                                   handoffSourcePID: 10,
+                                                   targetPID: 10,
+                                                   ownPID: 99) == nil
+               && SwitcherSupport.focusRetrySourcePID(sessionSourcePID: nil,
+                                                handoffSourcePID: 99,
+                                                targetPID: 10,
+                                                ownPID: 99) == nil,
+               "the target and this process are never kept as a handoff source")
         suite.expect(SwitcherSupport.shouldContinueFocusRetry(
                         targetPID: 10,
-                        sourcePID: SwitcherSupport.retainedActivationSourcePID(explicit: nil,
-                                                                         targetPID: 10,
-                                                                         frontmostPID: 20,
-                                                                         ownPID: 99),
+                        sourcePID: SwitcherSupport.focusRetrySourcePID(sessionSourcePID: nil,
+                                                                 handoffSourcePID: 20,
+                                                                 targetPID: 10,
+                                                                 ownPID: 99),
                         frontmostPID: 20,
                         targetIsMinimized: false,
                         targetStartedMinimized: false,
@@ -4617,15 +4622,15 @@ enum SwitcherModelFeatureTests {
                "Dock Preview and Command Bar ordinary windows keep their settling retry while the retained source is frontmost")
         suite.expect(!SwitcherSupport.shouldContinueFocusRetry(
                          targetPID: 10,
-                         sourcePID: SwitcherSupport.retainedActivationSourcePID(explicit: nil,
-                                                                          targetPID: 10,
-                                                                          frontmostPID: 20,
-                                                                          ownPID: 99),
+                         sourcePID: SwitcherSupport.focusRetrySourcePID(sessionSourcePID: nil,
+                                                                  handoffSourcePID: 20,
+                                                                  targetPID: 10,
+                                                                  ownPID: 99),
                          frontmostPID: 30,
                          targetIsMinimized: false,
                          targetStartedMinimized: false,
                          ownPID: 99),
-               "a retained activation source still stands down after an unrelated app becomes frontmost")
+               "a handoff source still stands down after an unrelated app becomes frontmost")
         suite.expect(!SwitcherSupport.shouldContinueFocusRetry(targetPID: 10,
                                                          sourcePID: 20,
                                                          frontmostPID: 20,
@@ -4689,8 +4694,29 @@ enum SwitcherModelFeatureTests {
             .components(separatedBy: "\n")
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
             .joined(separator: "\n")
-        suite.expect(activatorCode.contains("retainedActivationSourcePID("),
-               "activation resolves a retained source before scheduling focus retries")
+        let activateBody: String = {
+            guard let start = activatorCode.range(of: "static func activate(_ item: SwitcherItem,"),
+                  let end = activatorCode.range(of: "static func activate(pid: pid_t,",
+                                                range: start.upperBound..<activatorCode.endIndex)
+            else { return "" }
+            return activatorCode[start.lowerBound..<end.lowerBound]
+                .components(separatedBy: .whitespacesAndNewlines)
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+        }()
+        suite.expect(activateBody.contains("focusRetrySourcePID(")
+               && !activateBody.contains("frontmostApplication"),
+               "activation never adopts the frontmost app as a source on its own")
+        suite.expect(activateBody.contains(
+                "watchTargetMinimizeIfNeeded(windowID: windowID, targetPID: item.pid, "
+                + "targetWindowOwnerPID: windowOwnerPID, sourcePID: sourcePID,")
+               && activateBody.contains("sourcePID: sourcePID, app: app)"),
+               "only the session source arms the minimize restore and Space hops")
+        suite.expect(activateBody.contains("sourcePID: sourcePID, retrySourcePID: retrySourcePID,")
+               && activateBody.contains("sourcePID: retrySourcePID, state: retryState,"),
+               "focus retry guards use the handoff source while staging keeps the session source")
+        suite.expect(activatorCode.contains("activate(item, retry: retry, handoffSourcePID: handoffSourcePID)"),
+               "activation by pid forwards its source only as a handoff")
         let dockPreviewActivationCode = ((try? String(
             contentsOfFile: "Sources/Vorssaint/Services/DockPreview/DockPreviewService.swift",
             encoding: .utf8)) ?? "")
@@ -4701,10 +4727,11 @@ enum SwitcherModelFeatureTests {
             .components(separatedBy: "WindowActivator.activate(")
             .dropFirst()
         suite.expect(dockActivateCalls.count >= 3
-               && dockActivateCalls.allSatisfy { $0.contains("sourcePID:") }
-               && dockPreviewActivationCode.contains(
-                    "sourcePID: NSWorkspace.shared.frontmostApplication"),
-               "Dock Preview retains the frontmost app as the activation source")
+               && dockActivateCalls.allSatisfy {
+                   $0.prefix(200).contains("handoffSourcePID: NSWorkspace.shared.frontmostApplication")
+                       && !$0.prefix(200).contains(" sourcePID:")
+               },
+               "Dock Preview passes the frontmost app only as a focus handoff source")
         let commandBarWindowActivate: String = {
             let source = ((try? String(
                 contentsOfFile: "Sources/Vorssaint/Services/CommandBar/CommandBarCatalog.swift",
@@ -4714,17 +4741,17 @@ enum SwitcherModelFeatureTests {
                 .joined(separator: "\n")
             guard let start = source.range(of: "WindowActivator.activate(pid:") else { return "" }
             let before = source[..<start.lowerBound]
-            let sourceCapture = before.range(of: "let sourcePID = NSWorkspace.shared.frontmostApplication",
+            let sourceCapture = before.range(of: "let handoffSourcePID = NSWorkspace.shared.frontmostApplication",
                                              options: .backwards)
             let afterBeat = before.range(of: "afterBeat(", options: .backwards)
             let call = String(source[start.lowerBound...].prefix(320))
             guard let sourceCapture, let afterBeat,
                   sourceCapture.lowerBound < afterBeat.lowerBound,
-                  call.contains("sourcePID: sourcePID") else { return "" }
+                  call.contains("handoffSourcePID: handoffSourcePID") else { return "" }
             return call
         }()
         suite.expect(!commandBarWindowActivate.isEmpty,
-               "Command Bar retains the frontmost app before its activation beat")
+               "Command Bar captures its handoff source before the activation beat")
         let windowScopes = activatorCode
             .components(separatedBy: "windowIDs(ownerPID:")
             .dropFirst()

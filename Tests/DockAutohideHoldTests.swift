@@ -30,7 +30,7 @@ enum DockAutohideHoldTests {
         static func dockPreviewMayActivate(_ item: Int) -> Bool { mayActivate }
     }
     enum WindowActivator {
-        static func activate(_ item: Int, sourcePID: Int32? = nil) {
+        static func activate(_ item: Int, handoffSourcePID: Int32? = nil) {
             activationEvents.append("activate")
         }
     }
